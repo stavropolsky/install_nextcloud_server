@@ -54,10 +54,59 @@ The following is the command:
    
 `mkdir -p /root/ansible/install_nextcloud_server/templates/pve_create_vm`
 
-`cp pve_create_vm.yml ../../ && cp files/. ../../files/ -r && cp templates/pve_create_vm/preseed.cfg.j2 ../../templates/pve_create_vm/`
+`cp pve_create_vm.yml ../../ && cp files/. ../../files/ -r && cp templates/pve_create_vm/preseed.cfg.j2 ../../templates/pve_create_vm/ && cp -r group_vars/ ../../`
 
 `rm -r /root/ansible/install_nextcloud_server/tmp/ /root/ansible/master.zip`
-6.
 
+6. Editing files:
+   
+   /root/ansible/install_nextcloud_server/group_vars/all:
+   
+pve_api_user: "root@pam"
+pve_api_password: "your_root_password" - you must specify the root@pam password
+domain: "your_domain_name" - you must specify an existing domain, for example - yourcompany.com
+vmid: 180 - vmid any integer
+node: "pve" - specify your existing node name
+pve_guest: "cap-next" - enter the name of your future server
 
+/root/ansible/install_nextcloud_server/files/compose.yml
 
+YOUR_REVERSE_PROXY_NGINX_IP_ADDRESS - replace with the real ip address of your reverse proxy nginx server
+
+/root/ansible/install_nextcloud_server/files/.env
+
+YOUR_DATABASE_PASSWORD - your future database password
+
+NC_DOMAIN - external dns name nextlcoud, e.g. - next.yourcompany.com
+
+NEXTCLOUD_PASSWORD - future admin user password in nextcloud
+
+ONLYOFFICE_SECRET - any password
+
+REDIS_PASSWORD - any password
+
+SIGNALING_SECRET - any password
+
+TALK_INTERNAL_SECRET - any password
+
+TURN_SECRET - any password
+
+TALK_INTERNAL_SECRET - any password
+
+/root/ansible/install_nextcloud_server/templates/pve_create_vm/preseed.cfg.j2
+
+d-i netcfg/choose_interface select ens18 - any desired network interface name
+
+d-i netcfg/get_hostname string cap-next - the name of the VM to be created
+
+d-i netcfg/get_domain string YOUR_DOMAIN_NAME - domain name such as yourcompanyname.com
+
+d-i netcfg/hostname string cap-next - hostname VM
+
+d-i pkgsel/include string openssh-server curl ca-certificates docker-compose - installing packages openssh-server curl ca-certificates docker-compose
+
+In the # Post commands section, instead of YOUR PUBLIC SSH KEY PROXMOX, you must specify a valid public key of your proxmox server so that it can connect to the guest VM you are creating via ssh
+
+7. Launching playbook from /root/ansible/install_nextcloud_server directory:
+
+   `ansible-playbook pve_create_vm.yml -e "pve_node=pve" -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"`
