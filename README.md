@@ -115,3 +115,8 @@ In the # Post commands section, instead of YOUR PUBLIC SSH KEY PROXMOX, you must
 7. Launching playbook from `/root/ansible/install_nextcloud_server` directory:
 
    `ansible-playbook pve_create_vm.yml -e "pve_node=pve" -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"`
+
+
+Playbook was taken as a basis - https://gitlab.com/-/snippets/1707958
+
+I express my deep gratitude to https://gitlab.com/mejo-
