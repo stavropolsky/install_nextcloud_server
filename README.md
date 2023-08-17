@@ -63,10 +63,15 @@ The following is the command:
    `/root/ansible/install_nextcloud_server/group_vars/all`:
    
 pve_api_user: "root@pam"
+
 pve_api_password: "your_root_password" - you must specify the root@pam password
+
 domain: "your_domain_name" - you must specify an existing domain, for example - yourcompany.com
+
 vmid: 180 - vmid any integer
+
 node: "pve" - specify your existing node name
+
 pve_guest: "cap-next" - enter the name of your future server
 
 `/root/ansible/install_nextcloud_server/files/compose.yml`
