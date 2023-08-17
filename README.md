@@ -45,11 +45,13 @@ The following is the command:
 `ansible-galaxy init install_nextcloud_server`
 
 4. Download and unpack the archive from the current repository:
+   
 `wget https://github.com/stavropolsky/install_nextcloud_server/archive/refs/heads/master.zip`
 
 `unzip /root/ansible/master.zip -d /root/ansible/install_nextcloud_server/tmp && cd /root/ansible/install_nextcloud_server/tmp/install_nextcloud_server-master`
 
 6. Arrange files and folders in their places and delete temporary files and folders:
+   
 `mkdir -p /root/ansible/install_nextcloud_server/templates/pve_create_vm`
 
 `cp pve_create_vm.yml ../../ && cp files/. ../../files/ -r && cp templates/pve_create_vm/preseed.cfg.j2 ../../templates/pve_create_vm/`
