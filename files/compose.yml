@@ -1,0 +1,301 @@
+version: "1.0"
+
+services:
+  nextcloud-aio-apache:
+    depends_on:
+      - nextcloud-aio-onlyoffice
+      - nextcloud-aio-collabora
+      - nextcloud-aio-talk
+      - nextcloud-aio-nextcloud
+    image: nextcloud/aio-apache:latest
+    ports:
+      - ${APACHE_IP_BINDING}:${APACHE_PORT}:${APACHE_PORT}/tcp
+    environment:
+      - NC_DOMAIN=${NC_DOMAIN}
+      - NEXTCLOUD_HOST=nextcloud-aio-nextcloud
+      - COLLABORA_HOST=nextcloud-aio-collabora
+      - TALK_HOST=nextcloud-aio-talk
+      - APACHE_PORT=${APACHE_PORT}
+      - ONLYOFFICE_HOST=nextcloud-aio-onlyoffice
+      - TZ=${TIMEZONE}
+      - APACHE_MAX_SIZE=${APACHE_MAX_SIZE}
+      - APACHE_MAX_TIME=${NEXTCLOUD_MAX_TIME}
+    volumes:
+      - nextcloud_aio_nextcloud:/var/www/html:ro
+      - nextcloud_aio_apache:/mnt/data:rw
+    restart: unless-stopped
+    extra_hosts:
+      - "${NC_DOMAIN}:YOUR_REVERSE_PROXY_NGINX_ADDRESS"
+    networks:
+      - nextcloud-aio
+
+  nextcloud-aio-database:
+    image: nextcloud/aio-postgresql:latest
+    expose:
+      - "5432"
+    volumes:
+      - nextcloud_aio_database:/var/lib/postgresql/data:rw
+      - nextcloud_aio_database_dump:/mnt/data:rw
+    environment:
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=nextcloud_database
+      - POSTGRES_USER=nextcloud
+      - TZ=${TIMEZONE}
+      - PGTZ=${TIMEZONE}
+    stop_grace_period: 1800s
+    restart: unless-stopped
+    networks:
+      - nextcloud-aio
+    shm_size: 268435456
+
+  nextcloud-aio-nextcloud:
+    depends_on:
+      - nextcloud-aio-database
+      - nextcloud-aio-redis
+      - nextcloud-aio-clamav
+      - nextcloud-aio-fulltextsearch
+      - nextcloud-aio-imaginary
+    image: nextcloud/aio-nextcloud:latest
+    expose:
+      - "9000"
+      - "7867"
+    volumes:
+      - nextcloud_aio_nextcloud:/var/www/html:rw
+      - nextcloud_aio_nextcloud_data:/mnt/ncdata:rw
+      - ./mnt:/mnt/mount:rw
+      - ${NEXTCLOUD_TRUSTED_CACERTS_DIR}:/usr/local/share/ca-certificates:ro
+    environment:
+      - POSTGRES_HOST=nextcloud-aio-database
+      - POSTGRES_PASSWORD=${DATABASE_PASSWORD}
+      - POSTGRES_DB=nextcloud_database
+      - POSTGRES_USER=nextcloud
+      - REDIS_HOST=nextcloud-aio-redis
+      - REDIS_HOST_PASSWORD=${REDIS_PASSWORD}
+      - AIO_TOKEN=${AIO_TOKEN}
+      - NC_DOMAIN=${NC_DOMAIN}
+      - ADMIN_USER=admin
+      - ADMIN_PASSWORD=${NEXTCLOUD_PASSWORD}
+      - NEXTCLOUD_DATA_DIR=/mnt/ncdata
+      - OVERWRITEHOST=${NC_DOMAIN}
+      - OVERWRITEPROTOCOL=https
+      - TURN_SECRET=${TURN_SECRET}
+      - SIGNALING_SECRET=${SIGNALING_SECRET}
+      - ONLYOFFICE_SECRET=${ONLYOFFICE_SECRET}
+      - AIO_URL=${AIO_URL}
+      - NEXTCLOUD_MOUNT=${NEXTCLOUD_MOUNT}
+      - CLAMAV_ENABLED=${CLAMAV_ENABLED}
+      - CLAMAV_HOST=nextcloud-aio-clamav
+      - ONLYOFFICE_ENABLED=${ONLYOFFICE_ENABLED}
+      - COLLABORA_ENABLED=${COLLABORA_ENABLED}
+      - COLLABORA_HOST=nextcloud-aio-collabora
+      - TALK_ENABLED=${TALK_ENABLED}
+      - ONLYOFFICE_HOST=nextcloud-aio-onlyoffice
+      - UPDATE_NEXTCLOUD_APPS=${UPDATE_NEXTCLOUD_APPS}
+      - TZ=${TIMEZONE}
+      - TALK_PORT=${TALK_PORT}
+      - IMAGINARY_ENABLED=${IMAGINARY_ENABLED}
+      - IMAGINARY_HOST=nextcloud-aio-imaginary
+      - PHP_UPLOAD_LIMIT=${NEXTCLOUD_UPLOAD_LIMIT}
+      - PHP_MEMORY_LIMIT=${NEXTCLOUD_MEMORY_LIMIT}
+      - FULLTEXTSEARCH_ENABLED=${FULLTEXTSEARCH_ENABLED}
+      - FULLTEXTSEARCH_HOST=nextcloud-aio-fulltextsearch
+      - PHP_MAX_TIME=${NEXTCLOUD_MAX_TIME}
+      - TRUSTED_CACERTS_DIR=${NEXTCLOUD_TRUSTED_CACERTS_DIR}
+      - STARTUP_APPS=${NEXTCLOUD_STARTUP_APPS}
+      - ADDITIONAL_APKS=${NEXTCLOUD_ADDITIONAL_APKS}
+      - ADDITIONAL_PHP_EXTENSIONS=${NEXTCLOUD_ADDITIONAL_PHP_EXTENSIONS}
+      - INSTALL_LATEST_MAJOR=${INSTALL_LATEST_MAJOR}
+    restart: unless-stopped
+    extra_hosts:
+      - "${NC_DOMAIN}:YOUR_REVERSE_PROXY_NGINX_ADDRESS"
+    networks:
+      - nextcloud-aio
+
+  nextcloud-aio-redis:
+    image: nextcloud/aio-redis:latest
+    expose:
+      - "6379"
+    environment:
+      - REDIS_HOST_PASSWORD=${REDIS_PASSWORD}
+      - TZ=${TIMEZONE}
+    volumes:
+      - nextcloud_aio_redis:/data:rw
+    restart: unless-stopped
+    networks:
+      - nextcloud-aio
+
+  nextcloud-aio-collabora:
+#   profiles: ["collabora"]
+    image: nextcloud/aio-collabora:latest
+    expose:
+      - "9980"
+    environment:
+      - aliasgroup1=https://${NC_DOMAIN}:443
+      - extra_params=--o:ssl.enable=false --o:ssl.termination=true --o:mount_jail_tree=false --o:logging.level=warning --o:home_mode.enable=true ${COLLABORA_SECCOMP_POLICY} --o:remote_font_config.url=https://${NC_DOMAIN}/apps/richdocuments/settings/fonts.json
+      - dictionaries=${COLLABORA_DICTIONARIES}
+      - TZ=${TIMEZONE}
+      - server_name=${NC_DOMAIN}
+    volumes:
+      - nextcloud_aio_collabora_fonts:/opt/cool/systemplate/tmpfonts:rw
+    restart: unless-stopped
+    extra_hosts:
+      - "${NC_DOMAIN}:YOUR_REVERSE_PROXY_NGINX_ADDRESS"
+    networks:
+      - nextcloud-aio
+
+  nextcloud-aio-talk:
+#   profiles: ["talk"]
+    image: nextcloud/aio-talk:latest
+    ports:
+      - ${TALK_PORT}:${TALK_PORT}/tcp
+      - ${TALK_PORT}:${TALK_PORT}/udp
+    expose:
+      - "8081"
+    environment:
+      - NC_DOMAIN=${NC_DOMAIN}
+      - TURN_SECRET=${TURN_SECRET}
+      - INTERNAL_SECRET=${TALK_INTERNAL_SECRET}
+      - SIGNALING_SECRET=${SIGNALING_SECRET}
+      - TZ=${TIMEZONE}
+      - TALK_PORT=${TALK_PORT}
+    restart: unless-stopped
+    extra_hosts:
+      - "${NC_DOMAIN}:YOUR_REVERSE_PROXY_NGINX_ADDRESS"
+    networks:
+      - nextcloud-aio
+
+  nextcloud-aio-clamav:
+#   profiles: ["clamav"]
+    image: nextcloud/aio-clamav:latest
+    expose:
+      - "3310"
+    environment:
+      - TZ=${TIMEZONE}
+      - CLAMD_STARTUP_TIMEOUT=90
+    volumes:
+      - nextcloud_aio_clamav:/var/lib/clamav:rw
+    restart: unless-stopped
+    networks:
+      - nextcloud-aio
+
+  nextcloud-aio-onlyoffice:
+#   profiles: ["onlyoffice"]
+    image: nextcloud/aio-onlyoffice:latest
+    expose:
+      - "80"
+    environment:
+      - TZ=${TIMEZONE}
+      - JWT_ENABLED=true
+      - JWT_HEADER=AuthorizationJwt
+      - JWT_SECRET=${ONLYOFFICE_SECRET}
+    volumes:
+      - nextcloud_aio_onlyoffice:/var/lib/onlyoffice:rw
+    restart: unless-stopped
+    extra_hosts:
+      - "${NC_DOMAIN}:YOUR_REVERSE_PROXY_NGINX_ADDRESS"
+    networks:
+      - nextcloud-aio
+
+  nextcloud-aio-imaginary:
+#   profiles: ["imaginary"]
+    image: nextcloud/aio-imaginary:latest
+    expose:
+      - "9000"
+    environment:
+      - TZ=${TIMEZONE}
+    restart: unless-stopped
+    networks:
+      - nextcloud-aio
+    cap_add:
+      - SYS_NICE
+
+  nextcloud-aio-fulltextsearch:
+#   profiles: ["fulltextsearch"]
+    image: nextcloud/aio-fulltextsearch:latest
+    expose:
+      - "9200"
+    environment:
+      - TZ=${TIMEZONE}
+      - discovery.type=single-node
+      - ES_JAVA_OPTS=-Xms1024M -Xmx1024M
+      - POSTGRES_HOST=nextcloud-aio-database
+    volumes:
+      - nextcloud_aio_elasticsearch:/usr/share/elasticsearch/data:rw
+    restart: unless-stopped
+    networks:
+      - nextcloud-aio
+
+volumes:
+  nextcloud_aio_apache:
+    name: nextcloud_aio_apache
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/apache
+  nextcloud_aio_clamav:
+    name: nextcloud_aio_clamav
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/clamav
+  nextcloud_aio_collabora_fonts:
+    name: nextcloud_aio_collabora_fonts
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/collabora_fonts
+  nextcloud_aio_database:
+    name: nextcloud_aio_database
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/database
+  nextcloud_aio_database_dump:
+    name: nextcloud_aio_database_dump
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/database_dump
+  nextcloud_aio_elasticsearch:
+    name: nextcloud_aio_elasticsearch
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/elasticsearch
+  nextcloud_aio_nextcloud:
+    name: nextcloud_aio_nextcloud
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/nextcloud
+  nextcloud_aio_onlyoffice:
+    name: nextcloud_aio_onlyoffice
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/onlyoffice
+  nextcloud_aio_redis:
+    name: nextcloud_aio_redis
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/redis
+  nextcloud_aio_nextcloud_data:
+    name: nextcloud_aio_nextcloud_data
+    driver: local
+    driver_opts:
+      type: none
+      o: bind
+      device: ./data/nextcloud_data
+
+networks:
+  nextcloud-aio:

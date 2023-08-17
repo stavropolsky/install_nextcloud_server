@@ -1,0 +1,200 @@
+---
+
+
+- hosts: "{{ pve_node }}"
+
+  handlers:
+    - name: sleep
+      pause:
+        seconds: 5
+
+  tasks:
+    # TODO: Install from stretch-backports once available there
+    - name: "Install python-proxmoxer"
+      apt:
+        deb: "https://mirror.yandex.ru/debian/pool/main/p/proxmoxer/python-proxmoxer_1.0.3-1_all.deb"
+        state: present
+
+    - name: "Create Debian-Installer directory on PVE node"
+      file:
+        path: "/var/local/d-i/{{ pve_guest }}/tmp"
+        state: directory
+        owner: root
+        group: root
+        mode: 0755
+
+    - name: "Update Debian-Installer files"
+      get_url:
+        url: "https://mirror.yandex.ru/debian/dists/Debian11.7/main/installer-amd64/20210731%2Bdeb11u8/images/netboot/debian-installer/amd64/{{ item }}"
+        dest: "/var/local/d-i/"
+      with_items:
+        - linux
+        - initrd.gz
+
+    - name: "Copy Debian preseed file for VM {{ pve_guest }}"
+      template:
+        src: "../templates/pve_create_vm/preseed.cfg.j2"
+        dest: "/var/local/d-i/{{ pve_guest }}/{{ item }}"
+        owner: root
+        group: root
+        mode: 0644
+      with_items:
+        - "preseed.cfg"
+        - "tmp/preseed.cfg"
+
+    - name: "Unpack initrd.gz for VM {{ pve_guest }}"
+      shell: "gunzip -c /var/local/d-i/initrd.gz | cpio -i"
+      args:
+        chdir: "/var/local/d-i/{{ pve_guest }}/tmp"
+        creates: "/var/local/d-i/{{ pve_guest }}/tmp/init"
+
+    - name: "Build new initrd.gz for VM {{ pve_guest }}"
+      shell: "find . | cpio -H newc -o | gzip -9 >/var/local/d-i/{{ pve_guest }}/initrd.gz"
+      args:
+        chdir: "/var/local/d-i/{{ pve_guest }}/tmp"
+        creates: "/var/local/d-i/{{ pve_guest }}/initrd.gz"
+
+    - name: "Cleanup initrd.gz tmp files from VM {{ pve_guest }}"
+      file:
+        path: "/var/local/d-i/{{ pve_guest }}/tmp"
+        state: absent
+
+    - set_fact:
+        pve_vmid: "{{ vmid }}"
+
+    - name: "Create ZFS volume for VM {{ pve_guest }} - Disk 1"
+      zfs:
+        name: "rpool/data/vm-{{ vmid }}-disk-0"
+        state: present
+        extra_zfs_properties:
+          volsize: 16G
+    - name: "Create ZFS volume for VM {{ pve_guest }} - Disk 2"
+      zfs:
+        name: "rpool/data/vm-{{ vmid }}-disk-1"
+        state: present
+        extra_zfs_properties:
+          volsize: 100G
+
+
+    - name: "Create VM {{ pve_guest }}"
+      proxmox_kvm:
+        api_user: '{{ pve_api_user }}'
+        api_password: '{{ pve_api_password }}'
+        api_host: '{{ pve_node }}.{{ domain }}'
+        vmid: '{{ vmid }}'
+        node: '{{ node }}'
+        name: '{{ pve_guest }}'
+        state: 'present'
+        ostype: 'l26'
+        onboot: 'yes'
+        autostart: 'yes'
+        sockets: '2'
+        hotplug: 'disk, network, cpu'
+        kvm: 'yes'
+        cores: '4'
+        memory: '{{ pve_memory|d("8192") }}'
+        scsihw: 'virtio-scsi-single'
+        agent: 'yes'
+        scsi: '{
+          "scsi0":"local-zfs:vm-{{ pve_vmid }}-disk-0,discard={{"on"}},iothread={{"1"}},size={{"16G"}},ssd={{"1"}}",
+          "scsi1":"local-zfs:vm-{{ pve_vmid }}-disk-1,discard={{"on"}},iothread={{"1"}},size={{"100G"}},ssd={{"1"}}"
+          }'
+
+        bootdisk: 'scsi0'
+        boot: 'c'
+        net: '{"net0":"virtio,bridge=vmbr10"}'
+        args: '-serial unix:/var/run/qemu-server/{{ pve_vmid }}.serial,server,nowait -kernel /var/local/d-i/linux -initrd /var/local/d-i/{{ pve_guest }}/initrd.gz -no-reboot'
+      notify: sleep
+      register: __pve_vm_created
+
+    - meta: flush_handlers
+
+    - name: "Start installation on VM {{ pve_guest }}"
+      proxmox_kvm:
+        api_user: '{{ pve_api_user }}'
+        api_password: '{{ pve_api_password }}'
+        api_host: '{{ pve_node }}.{{ domain }}'
+        vmid: '{{ vmid }}'
+        node: '{{ node }}'
+        name: '{{ pve_guest }}'
+        state: 'started'
+      notify: sleep
+      when: __pve_vm_created.changed
+
+    - meta: flush_handlers
+
+    - name: "Remove deploy args from VM {{ pve_guest }}"
+      proxmox_kvm:
+        api_user: '{{ pve_api_user }}'
+        api_password: '{{ pve_api_password }}'
+        api_host: '{{ pve_node }}.{{ domain }}'
+        vmid: '{{ vmid }}'
+        node: '{{ node }}'
+        name: '{{ pve_guest }}'
+        args: '-serial unix:/var/run/qemu-server/{{ pve_vmid }}.serial,server,nowait'
+        update: yes
+      when: __pve_vm_created.changed
+
+    - name: "Get PID from installation on VM {{ pve_guest }}"
+      slurp:
+        src: "/var/run/qemu-server/{{ pve_vmid }}.pid"
+      register: __pve_vm_pidfile
+
+    - set_fact:
+        pve_vm_pid: "{{ __pve_vm_pidfile['content'] | b64decode | trim }}"
+
+
+    - name: "Wait for VM to be halted after installation"
+      wait_for:
+        path: "/proc/{{ pve_vm_pid }}/status"
+        state: absent
+        delay: 60
+        timeout: 900
+      when: __pve_vm_created.changed
+
+
+    - name: "Add a delay before starting VM"
+      pause:
+        seconds: 30
+      when: __pve_vm_created.changed
+
+
+    - name: "Start VM {{ pve_guest }}"
+      proxmox_kvm:
+        api_user: '{{ pve_api_user }}'
+        api_password: '{{ pve_api_password }}'
+        api_host: '{{ pve_node }}.{{ domain }}'
+        vmid: '{{ vmid }}'
+        node: '{{ node }}'
+        name: '{{ pve_guest }}'
+        state: 'started'
+      when: __pve_vm_created.changed
+
+
+    - name: "Add delay after VM startup"
+      pause:
+        seconds: 30
+      when: __pve_vm_created.changed
+
+
+    - name: "Install Docker on the newly created VM"
+      shell: "curl -fsSL https://get.docker.com | sh"
+      delegate_to: "{{ pve_guest }}"
+
+    - name: "Copy files to the newly created VM"
+      ansible.builtin.copy:
+        src: "/root/ansible/install_nextcloud_server/files/"
+        dest: "/srv/next/"
+        owner: root
+        group: root
+        mode: "0755"
+      delegate_to: "{{ pve_guest }}"
+
+    - name: "Init Nextcloud"
+      shell: "/srv/next/next_init.sh"
+      delegate_to: "{{ pve_guest }}"
+
+    - name: "Start Nextcloud"
+      shell: "/srv/next/next_start.sh"
+      delegate_to: "{{ pve_guest }}"
+
