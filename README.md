@@ -11,4 +11,38 @@ cap-next.in A 191.168.1.180
 
 next A external_ip_address
 
-You also need to add and enable the configuration on the reverse proxy nginx server, configuration example - next file.
+You also need to add and enable the configuration on the reverse proxy nginx server, configuration example - "next" file.
+
+To do this, add a link to the /etc/apt/sources.list file:
+
+`deb http://ppa.launchpad.net/ansible/ansible/ubuntu main main`
+
+The following is the command:
+
+`apt-key adv --keyserver keyserver.ubuntu.com --recv-keys 93C4A3FD7BB9C367`
+
+`apt update`
+
+`apt install ansible`
+
+`apt install pip`
+
+`apt install tree`
+
+`apt install unzip`
+
+`pip install proxmoxer`
+
+`pip install requests`
+
+`ansible-galaxy collection install community.general`
+
+
+Create a directory and role for our project:
+
+`mkdir ansible && cd ansible`
+
+`ansible-galaxy init install_nextcloud_server`
+
+
+
