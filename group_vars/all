@@ -1,7 +1,0 @@
-pve_api_user: "root@pam"
-pve_api_password: "YOUR_ROOT_PASSWORD_PROXMOX"
-domain: "YOUR_DOMAIN_NAME"
-vmid: 180
-node: "YOUR_NODE_NAME_PROXMOX"
-pve_guest: "YOUR_GUEST_NAME"
-
