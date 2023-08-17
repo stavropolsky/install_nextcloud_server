@@ -1,0 +1,6 @@
+pve_api_user: "root@pam"
+pve_api_password: "your_root_password"
+domain: "your_domain_name"
+vmid: 180
+node: "pve"
+pve_guest: "cap-next"
