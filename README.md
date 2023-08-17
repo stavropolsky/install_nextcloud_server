@@ -60,7 +60,7 @@ The following is the command:
 
 6. Editing files:
    
-   /root/ansible/install_nextcloud_server/group_vars/all:
+   `/root/ansible/install_nextcloud_server/group_vars/all`:
    
 pve_api_user: "root@pam"
 pve_api_password: "your_root_password" - you must specify the root@pam password
@@ -69,11 +69,11 @@ vmid: 180 - vmid any integer
 node: "pve" - specify your existing node name
 pve_guest: "cap-next" - enter the name of your future server
 
-/root/ansible/install_nextcloud_server/files/compose.yml
+`/root/ansible/install_nextcloud_server/files/compose.yml`
 
 YOUR_REVERSE_PROXY_NGINX_IP_ADDRESS - replace with the real ip address of your reverse proxy nginx server
 
-/root/ansible/install_nextcloud_server/files/.env
+`/root/ansible/install_nextcloud_server/files/.env`
 
 YOUR_DATABASE_PASSWORD - your future database password
 
@@ -93,7 +93,7 @@ TURN_SECRET - any password
 
 TALK_INTERNAL_SECRET - any password
 
-/root/ansible/install_nextcloud_server/templates/pve_create_vm/preseed.cfg.j2
+`/root/ansible/install_nextcloud_server/templates/pve_create_vm/preseed.cfg.j2`
 
 d-i netcfg/choose_interface select ens18 - any desired network interface name
 
@@ -107,6 +107,6 @@ d-i pkgsel/include string openssh-server curl ca-certificates docker-compose - i
 
 In the # Post commands section, instead of YOUR PUBLIC SSH KEY PROXMOX, you must specify a valid public key of your proxmox server so that it can connect to the guest VM you are creating via ssh
 
-7. Launching playbook from /root/ansible/install_nextcloud_server directory:
+7. Launching playbook from `/root/ansible/install_nextcloud_server` directory:
 
    `ansible-playbook pve_create_vm.yml -e "pve_node=pve" -e "ansible_ssh_common_args='-o StrictHostKeyChecking=no'"`
